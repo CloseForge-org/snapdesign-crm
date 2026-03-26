@@ -1,11 +1,13 @@
 -- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
+
+-- Use gen_random_uuid() instead (built-in, no extension needed)
 
 -- ============================================================
 -- Table: customers
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.customers (
-  id                    uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now(),
   name                  text NOT NULL,
@@ -62,7 +64,7 @@ CREATE TRIGGER customers_updated_at
 -- Table: stage_history
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.stage_history (
-  id            uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id   uuid NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
   from_stage    text NOT NULL,
   to_stage      text NOT NULL,
@@ -75,7 +77,7 @@ CREATE TABLE IF NOT EXISTS public.stage_history (
 -- Table: activity_log
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.activity_log (
-  id             uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id    uuid NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
   activity_type  text NOT NULL DEFAULT 'note',
   content        text NOT NULL,
@@ -87,7 +89,7 @@ CREATE TABLE IF NOT EXISTS public.activity_log (
 -- Table: payments
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.payments (
-  id             uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id    uuid NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
   amount         numeric NOT NULL,
   payment_type   text NOT NULL DEFAULT 'deposit',
