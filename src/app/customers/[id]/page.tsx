@@ -8,20 +8,46 @@ import BottomNav from '@/components/BottomNav'
 import StageSelector from '@/components/StageSelector'
 import ActivityTimeline from '@/components/ActivityTimeline'
 import PaymentLog from '@/components/PaymentLog'
+import NewProjectForm from '@/components/NewProjectForm'
 import {
   getStageLabel, STAGES, LEAD_SOURCES, BUILDING_TYPES, BUDGET_RANGES,
   DISTRICTS, SCOPE_OPTIONS, STYLE_OPTIONS, TIMELINE_OPTIONS,
   CONDITIONS, OWNERSHIP_TYPES, LOST_REASONS, SUBSIDY_STATUS, ELIGIBILITY_REASONS
 } from '@/lib/stages'
-import type { Customer, Activity, Payment, StageHistory } from '@/lib/types'
+import type { Customer, Activity, Payment, StageHistory, Project } from '@/lib/types'
 
-type TabType = 'info' | 'activity' | 'payments' | 'history'
+type TabType = 'info' | 'activity' | 'payments' | 'history' | 'projects'
+
+// Stages where project management is relevant
+const PROJECT_ELIGIBLE_STAGES = [
+  'contract_signed', 'collecting_consent', 'structural_assessment',
+  'subsidy_submitted', 'subsidy_approved', 'pre_construction',
+  'under_construction', 'inspection', 'completed',
+  'subsidy_reimbursement', 'followup', 'referral_generated',
+]
+
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  planning: '規劃中',
+  in_progress: '施工中',
+  paused: '暫停',
+  completed: '已完工',
+  cancelled: '已取消',
+}
+
+const PROJECT_STATUS_COLORS: Record<string, string> = {
+  planning: '#3b82f6',
+  in_progress: '#e8734a',
+  paused: '#f0a848',
+  completed: '#22c55e',
+  cancelled: '#6b7280',
+}
 
 const TABS: { key: TabType; label: string }[] = [
   { key: 'info', label: '資料' },
   { key: 'activity', label: '活動' },
   { key: 'payments', label: '款項' },
   { key: 'history', label: '歷程' },
+  { key: 'projects', label: '專案' },
 ]
 
 const formatNTD = (n?: number | null) =>
@@ -45,6 +71,8 @@ export default function CustomerDetailPage() {
   const [editData, setEditData] = useState<Partial<Customer>>({})
   const [saving, setSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [showNewProject, setShowNewProject] = useState(false)
   const [urlExtractLoading, setUrlExtractLoading] = useState(false)
   const [urlExtractError, setUrlExtractError] = useState('')
   const [urlExtractSuccess, setUrlExtractSuccess] = useState('')
@@ -125,11 +153,12 @@ export default function CustomerDetailPage() {
 
   const loadCustomer = async () => {
     setLoading(true)
-    const [customerRes, activitiesRes, paymentsRes, historyRes] = await Promise.all([
+    const [customerRes, activitiesRes, paymentsRes, historyRes, projectsRes] = await Promise.all([
       supabase.from('customers').select('*').eq('id', id).single(),
       supabase.from('activity_log').select('*').eq('customer_id', id).order('created_at', { ascending: false }),
       supabase.from('payments').select('*').eq('customer_id', id).order('payment_date', { ascending: false }),
       supabase.from('stage_history').select('*').eq('customer_id', id).order('changed_at', { ascending: false }),
+      supabase.from('projects').select('*').eq('customer_id', id).order('created_at', { ascending: false }),
     ])
 
     if (customerRes.data) {
@@ -141,6 +170,7 @@ export default function CustomerDetailPage() {
     setActivities(activitiesRes.data || [])
     setPayments(paymentsRes.data || [])
     setStageHistory(historyRes.data || [])
+    setProjects(projectsRes.data || [])
     setLoading(false)
   }
 
@@ -772,7 +802,73 @@ export default function CustomerDetailPage() {
             )}
           </div>
         )}
+
+        {/* PROJECTS TAB */}
+        {activeTab === 'projects' && (
+          <div>
+            {/* Create project button for eligible stages */}
+            {customer && PROJECT_ELIGIBLE_STAGES.includes(customer.current_stage) && (
+              <button
+                onClick={() => setShowNewProject(true)}
+                className="w-full mb-4 py-3.5 bg-[#e8734a] text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 min-h-[44px]"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                建立專案
+              </button>
+            )}
+
+            {projects.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <div className="text-4xl mb-3">📋</div>
+                <p className="text-sm">尚無專案</p>
+                {customer && !PROJECT_ELIGIBLE_STAGES.includes(customer.current_stage) && (
+                  <p className="text-xs mt-2">簽約後即可建立專案</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {projects.map(project => (
+                  <Link key={project.id} href={`/projects/${project.id}`}>
+                    <div className="card active:opacity-80 transition-opacity">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-medium text-gray-900 text-sm">{project.project_name}</h3>
+                        <span
+                          className="flex-shrink-0 px-2 py-0.5 rounded-lg text-xs font-medium"
+                          style={{
+                            color: PROJECT_STATUS_COLORS[project.status],
+                            backgroundColor: PROJECT_STATUS_COLORS[project.status] + '20',
+                          }}
+                        >
+                          {PROJECT_STATUS_LABELS[project.status]}
+                        </span>
+                      </div>
+                      <div className="flex gap-3 text-xs text-gray-400">
+                        {project.start_date && (
+                          <span>開始 {new Date(project.start_date).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' })}</span>
+                        )}
+                        {project.total_budget && (
+                          <span>NT$ {Number(project.total_budget).toLocaleString('zh-TW')}</span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* New Project Form Modal */}
+      {showNewProject && customer && (
+        <NewProjectForm
+          customer={customer}
+          onClose={() => setShowNewProject(false)}
+        />
+      )}
 
       <BottomNav />
     </div>
