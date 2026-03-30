@@ -9,6 +9,7 @@ import StageSelector from '@/components/StageSelector'
 import ActivityTimeline from '@/components/ActivityTimeline'
 import PaymentLog from '@/components/PaymentLog'
 import NewProjectForm from '@/components/NewProjectForm'
+import ScreenshotExtractor, { type ExtractedData } from '@/components/ScreenshotExtractor'
 import {
   getStageLabel, STAGES, LEAD_SOURCES, BUILDING_TYPES, BUDGET_RANGES,
   DISTRICTS, SCOPE_OPTIONS, STYLE_OPTIONS, TIMELINE_OPTIONS,
@@ -140,6 +141,20 @@ export default function CustomerDetailPage() {
       }, 600)
     }
   }
+
+  const handleScreenshotExtractedEdit = useCallback((data: ExtractedData) => {
+    const updates: Partial<Customer> = {}
+    if (data.address) updates.address = data.address
+    if (data.district) updates.district = data.district
+    if (data.size_ping != null) updates.size_ping = data.size_ping
+    if (data.unit_floor != null) updates.unit_floor = data.unit_floor
+    if (data.total_floors != null) updates.total_floors = data.total_floors
+    if (data.room_layout) updates.room_layout = data.room_layout
+    if (data.building_type) updates.building_type = data.building_type
+    if (data.building_age != null) updates.building_age = data.building_age
+    if (data.current_condition) updates.current_condition = data.current_condition
+    setEditData(prev => ({ ...prev, ...updates }))
+  }, [])
 
   useEffect(() => {
     checkAuth()
@@ -454,6 +469,13 @@ export default function CustomerDetailPage() {
                 </InfoRow>
               </dl>
             </div>
+
+            {/* Screenshot extraction — only in edit mode */}
+            {editing && (
+              <ScreenshotExtractor
+                onExtracted={handleScreenshotExtractedEdit}
+              />
+            )}
 
             {/* Property Info */}
             <div className="card">

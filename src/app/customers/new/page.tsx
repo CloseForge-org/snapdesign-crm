@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import ScreenshotExtractor, { type ExtractedData } from '@/components/ScreenshotExtractor'
 import {
   LEAD_SOURCES, BUILDING_TYPES, BUDGET_RANGES, DISTRICTS,
   SCOPE_OPTIONS, STYLE_OPTIONS, TIMELINE_OPTIONS, CONDITIONS,
@@ -120,6 +121,26 @@ export default function NewCustomerPage() {
       setUrlError('擷取失敗，請手動輸入')
     } finally {
       setUrlLoading(false)
+    }
+  }, [])
+
+  const handleScreenshotExtracted = useCallback((data: ExtractedData) => {
+    const filled: string[] = []
+    const updates: Partial<FormData> = {}
+
+    if (data.address) { updates.address = data.address; filled.push('address') }
+    if (data.district) { updates.district = data.district; filled.push('district') }
+    if (data.size_ping != null) { updates.size_ping = String(data.size_ping); filled.push('size_ping') }
+    if (data.unit_floor != null) { updates.unit_floor = String(data.unit_floor); filled.push('unit_floor') }
+    if (data.total_floors != null) { updates.total_floors = String(data.total_floors); filled.push('total_floors') }
+    if (data.room_layout) { updates.room_layout = data.room_layout; filled.push('room_layout') }
+    if (data.building_type) { updates.building_type = data.building_type; filled.push('building_type') }
+    if (data.building_age != null) { updates.building_age = String(data.building_age); filled.push('building_age') }
+    if (data.current_condition) { updates.current_condition = data.current_condition; filled.push('current_condition') }
+
+    setForm(prev => ({ ...prev, ...updates }))
+    if (filled.length > 0) {
+      flashField(filled)
     }
   }, [])
 
@@ -276,57 +297,65 @@ export default function NewCustomerPage() {
         {step === 0 && (
           <div className="space-y-4">
 
-            {/* URL Auto-extraction */}
-            <div className="card border-2 border-[#e8734a]/20">
-              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8734a" strokeWidth="2">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                </svg>
-                快速填入（選填）
-              </h3>
-              <div className="relative">
-                <input
-                  type="url"
-                  value={urlInput}
-                  onChange={e => handleUrlChange(e.target.value)}
-                  onPaste={e => {
-                    const pasted = e.clipboardData.getData('text')
-                    if (pasted.trim().startsWith('http')) {
-                      setTimeout(() => extractFromUrl(pasted.trim()), 100)
-                    }
-                  }}
-                  className="input-field pr-10"
-                  placeholder="貼上 591 或其他房屋連結..."
-                  inputMode="url"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                />
-                {urlLoading && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-[#e8734a] border-t-transparent rounded-full animate-spin" />
+            {/* Auto-extraction cards — side by side on desktop, stacked on mobile */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* URL Auto-extraction */}
+              <div className="card border-2 border-[#e8734a]/20">
+                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8734a" strokeWidth="2">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                  🔗 從連結擷取（選填）
+                </h3>
+                <div className="relative">
+                  <input
+                    type="url"
+                    value={urlInput}
+                    onChange={e => handleUrlChange(e.target.value)}
+                    onPaste={e => {
+                      const pasted = e.clipboardData.getData('text')
+                      if (pasted.trim().startsWith('http')) {
+                        setTimeout(() => extractFromUrl(pasted.trim()), 100)
+                      }
+                    }}
+                    className="input-field pr-10"
+                    placeholder="貼上 591 或其他房屋連結..."
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                  {urlLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-[#e8734a] border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+                {urlSuccess && (
+                  <div className="mt-2 text-sm text-green-600 font-medium flex items-center gap-1.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    {urlSuccess}
                   </div>
                 )}
+                {urlError && (
+                  <div className="mt-2 text-sm text-red-500 flex items-center gap-1.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    {urlError}
+                  </div>
+                )}
+                <p className="text-xs text-gray-400 mt-2">貼上 591 租屋連結，系統會自動填入房屋資料</p>
               </div>
-              {urlSuccess && (
-                <div className="mt-2 text-sm text-green-600 font-medium flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  {urlSuccess}
-                </div>
-              )}
-              {urlError && (
-                <div className="mt-2 text-sm text-red-500 flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  {urlError}
-                </div>
-              )}
-              <p className="text-xs text-gray-400 mt-2">貼上 591 租屋連結，系統會自動填入房屋資料</p>
+
+              {/* Screenshot Auto-extraction */}
+              <ScreenshotExtractor
+                onExtracted={handleScreenshotExtracted}
+              />
             </div>
 
             <div className="card">
