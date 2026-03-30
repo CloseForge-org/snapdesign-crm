@@ -68,3 +68,59 @@ export interface Payment {
   created_by: string
   created_at: string
 }
+
+export interface Project {
+  id: string
+  customer_id: string
+  project_name: string
+  status: 'planning' | 'in_progress' | 'paused' | 'completed' | 'cancelled'
+  start_date?: string
+  target_end_date?: string
+  actual_end_date?: string
+  total_budget?: number
+  spent_so_far: number
+  contractor_name?: string
+  contractor_phone?: string
+  contractor_notes?: string
+  google_drive_url?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  // joined
+  customer?: Customer
+  tasks?: ProjectTask[]
+}
+
+export interface ProjectTask {
+  id: string
+  project_id: string
+  task_name: string
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped'
+  assigned_to?: string
+  start_date?: string
+  end_date?: string
+  estimated_cost?: number
+  actual_cost?: number
+  sort_order: number
+  notes?: string
+  created_at: string
+}
+
+export interface ProjectPhoto {
+  id: string
+  project_id: string
+  photo_url: string
+  caption?: string
+  phase: 'before' | 'during' | 'after'
+  taken_at?: string
+  created_at: string
+}
+
+export interface ProjectUpdate {
+  id: string
+  project_id: string
+  content: string
+  update_type: 'progress' | 'issue' | 'milestone' | 'note'
+  created_by?: string
+  created_at: string
+}

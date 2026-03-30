@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
@@ -63,6 +63,75 @@ export default function NewCustomerPage() {
   const [form, setForm] = useState<FormData>(initialForm)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [urlInput, setUrlInput] = useState('')
+  const [urlLoading, setUrlLoading] = useState(false)
+  const [urlError, setUrlError] = useState('')
+  const [urlSuccess, setUrlSuccess] = useState('')
+  const [highlightedFields, setHighlightedFields] = useState<Set<string>>(new Set())
+  const urlDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flashField = (fields: string[]) => {
+    setHighlightedFields(new Set(fields))
+    setTimeout(() => setHighlightedFields(new Set()), 1800)
+  }
+
+  const extractFromUrl = useCallback(async (url: string) => {
+    if (!url.trim() || !url.startsWith('http')) return
+    setUrlLoading(true)
+    setUrlError('')
+    setUrlSuccess('')
+    try {
+      const res = await fetch('/api/extract-listing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim() }),
+      })
+      const data = await res.json()
+
+      if (data.error && !data.address && !data.size_ping && !data.monthly_rent) {
+        setUrlError(data.error || '無法擷取資料，請手動輸入')
+        return
+      }
+
+      const filled: string[] = []
+      const updates: Partial<FormData> = {}
+
+      // Always save the URL
+      updates.listing_url = url.trim()
+
+      if (data.address) { updates.address = data.address; filled.push('address') }
+      if (data.district) { updates.district = data.district; filled.push('district') }
+      if (data.size_ping) { updates.size_ping = String(data.size_ping); filled.push('size_ping') }
+      if (data.unit_floor) { updates.unit_floor = String(data.unit_floor); filled.push('unit_floor') }
+      if (data.total_floors) { updates.total_floors = String(data.total_floors); filled.push('total_floors') }
+      if (data.room_layout) { updates.room_layout = data.room_layout; filled.push('room_layout') }
+      if (data.building_type) { updates.building_type = data.building_type; filled.push('building_type') }
+      if (data.building_age) { updates.building_age = String(data.building_age); filled.push('building_age') }
+
+      setForm(prev => ({ ...prev, ...updates }))
+
+      if (filled.length > 0) {
+        flashField(filled)
+        setUrlSuccess(`已自動填入 ${filled.length} 個欄位`)
+      } else {
+        setUrlError('無法擷取資料，請手動輸入')
+      }
+    } catch {
+      setUrlError('擷取失敗，請手動輸入')
+    } finally {
+      setUrlLoading(false)
+    }
+  }, [])
+
+  const handleUrlChange = (val: string) => {
+    setUrlInput(val)
+    setUrlError('')
+    setUrlSuccess('')
+    if (urlDebounceRef.current) clearTimeout(urlDebounceRef.current)
+    if (val.trim().startsWith('http')) {
+      urlDebounceRef.current = setTimeout(() => extractFromUrl(val), 800)
+    }
+  }
 
   const updateForm = (field: keyof FormData, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -206,6 +275,60 @@ export default function NewCustomerPage() {
         {/* Step 1: Basic Info */}
         {step === 0 && (
           <div className="space-y-4">
+
+            {/* URL Auto-extraction */}
+            <div className="card border-2 border-[#e8734a]/20">
+              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8734a" strokeWidth="2">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                快速填入（選填）
+              </h3>
+              <div className="relative">
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={e => handleUrlChange(e.target.value)}
+                  onPaste={e => {
+                    const pasted = e.clipboardData.getData('text')
+                    if (pasted.trim().startsWith('http')) {
+                      setTimeout(() => extractFromUrl(pasted.trim()), 100)
+                    }
+                  }}
+                  className="input-field pr-10"
+                  placeholder="貼上 591 或其他房屋連結..."
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+                {urlLoading && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-[#e8734a] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+              {urlSuccess && (
+                <div className="mt-2 text-sm text-green-600 font-medium flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  {urlSuccess}
+                </div>
+              )}
+              {urlError && (
+                <div className="mt-2 text-sm text-red-500 flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  {urlError}
+                </div>
+              )}
+              <p className="text-xs text-gray-400 mt-2">貼上 591 租屋連結，系統會自動填入房屋資料</p>
+            </div>
+
             <div className="card">
               <h3 className="font-semibold text-gray-900 mb-4">基本資料</h3>
 
@@ -333,7 +456,7 @@ export default function NewCustomerPage() {
                   type="text"
                   value={form.address}
                   onChange={e => updateForm('address', e.target.value)}
-                  className="input-field"
+                  className={`input-field transition-all duration-300 ${highlightedFields.has('address') ? 'bg-yellow-50 ring-2 ring-yellow-300' : ''}`}
                   placeholder="台北市大安區..."
                 />
               </div>
@@ -343,7 +466,7 @@ export default function NewCustomerPage() {
                 <select
                   value={form.district}
                   onChange={e => updateForm('district', e.target.value)}
-                  className="input-field"
+                  className={`input-field transition-all duration-300 ${highlightedFields.has('district') ? 'bg-yellow-50 ring-2 ring-yellow-300' : ''}`}
                 >
                   <option value="">請選擇</option>
                   {DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
@@ -354,7 +477,7 @@ export default function NewCustomerPage() {
             <div className="card">
               <h3 className="font-semibold text-gray-900 mb-4">建物資訊</h3>
 
-              <div className="mb-4">
+              <div className={`mb-4 rounded-xl p-1 transition-all duration-300 ${highlightedFields.has('building_type') ? 'bg-yellow-50 ring-2 ring-yellow-300' : ''}`}>
                 <label className="label">建物類型 <span className="text-red-400">*</span></label>
                 <div className="flex flex-wrap gap-2">
                   {BUILDING_TYPES.map(t => (
@@ -378,7 +501,7 @@ export default function NewCustomerPage() {
                     type="number"
                     value={form.unit_floor}
                     onChange={e => updateForm('unit_floor', e.target.value)}
-                    className="input-field"
+                    className={`input-field transition-all duration-300 ${highlightedFields.has('unit_floor') ? 'bg-yellow-50 ring-2 ring-yellow-300' : ''}`}
                     placeholder="例：3"
                     inputMode="numeric"
                   />
@@ -389,7 +512,7 @@ export default function NewCustomerPage() {
                     type="number"
                     value={form.total_floors}
                     onChange={e => updateForm('total_floors', e.target.value)}
-                    className="input-field"
+                    className={`input-field transition-all duration-300 ${highlightedFields.has('total_floors') ? 'bg-yellow-50 ring-2 ring-yellow-300' : ''}`}
                     placeholder="例：6"
                     inputMode="numeric"
                   />
@@ -403,7 +526,7 @@ export default function NewCustomerPage() {
                     type="number"
                     value={form.building_age}
                     onChange={e => updateForm('building_age', e.target.value)}
-                    className="input-field"
+                    className={`input-field transition-all duration-300 ${highlightedFields.has('building_age') ? 'bg-yellow-50 ring-2 ring-yellow-300' : ''}`}
                     placeholder="例：35"
                     inputMode="numeric"
                   />
@@ -414,7 +537,7 @@ export default function NewCustomerPage() {
                     type="number"
                     value={form.size_ping}
                     onChange={e => updateForm('size_ping', e.target.value)}
-                    className="input-field"
+                    className={`input-field transition-all duration-300 ${highlightedFields.has('size_ping') ? 'bg-yellow-50 ring-2 ring-yellow-300' : ''}`}
                     placeholder="例：28.5"
                     inputMode="decimal"
                   />
@@ -427,7 +550,7 @@ export default function NewCustomerPage() {
                   type="text"
                   value={form.room_layout}
                   onChange={e => updateForm('room_layout', e.target.value)}
-                  className="input-field"
+                  className={`input-field transition-all duration-300 ${highlightedFields.has('room_layout') ? 'bg-yellow-50 ring-2 ring-yellow-300' : ''}`}
                   placeholder="例：3房2廳1衛"
                 />
               </div>

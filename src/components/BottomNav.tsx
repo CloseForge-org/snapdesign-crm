@@ -26,6 +26,21 @@ const navItems = [
     ),
   },
   {
+    href: '/projects',
+    label: '專案',
+    icon: (active: boolean) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#e8734a' : '#9ca3af'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="9" y="2" width="6" height="4" rx="1" />
+        <path d="M5 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1" />
+        <line x1="9" y1="12" x2="15" y2="12" />
+        <line x1="9" y1="16" x2="13" y2="16" />
+        <polyline points="6 9 7 10 9 8" stroke={active ? '#e8734a' : '#9ca3af'} />
+        <polyline points="6 13 7 14 9 12" stroke={active ? '#e8734a' : '#9ca3af'} />
+        <polyline points="6 17 7 18 9 16" stroke={active ? '#e8734a' : '#9ca3af'} />
+      </svg>
+    ),
+  },
+  {
     href: '/customers',
     label: '客戶',
     icon: (active: boolean) => (

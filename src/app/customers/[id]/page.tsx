@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -45,6 +45,73 @@ export default function CustomerDetailPage() {
   const [editData, setEditData] = useState<Partial<Customer>>({})
   const [saving, setSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [urlExtractLoading, setUrlExtractLoading] = useState(false)
+  const [urlExtractError, setUrlExtractError] = useState('')
+  const [urlExtractSuccess, setUrlExtractSuccess] = useState('')
+  const [showUrlExtractOffer, setShowUrlExtractOffer] = useState(false)
+  const [pendingExtractUrl, setPendingExtractUrl] = useState('')
+  const urlExtractDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const applyExtractedToEdit = useCallback(async (url: string) => {
+    if (!url.trim().startsWith('http')) return
+    setUrlExtractLoading(true)
+    setUrlExtractError('')
+    setUrlExtractSuccess('')
+    try {
+      const res = await fetch('/api/extract-listing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim() }),
+      })
+      const data = await res.json()
+
+      if (data.error && !data.address && !data.size_ping && !data.monthly_rent) {
+        setUrlExtractError(data.error || '無法擷取資料')
+        setShowUrlExtractOffer(false)
+        return
+      }
+
+      const updates: Partial<Customer> = {}
+      let filled = 0
+
+      if (data.address) { updates.address = data.address; filled++ }
+      if (data.district) { updates.district = data.district; filled++ }
+      if (data.size_ping) { updates.size_ping = data.size_ping; filled++ }
+      if (data.unit_floor) { updates.unit_floor = data.unit_floor; filled++ }
+      if (data.total_floors) { updates.total_floors = data.total_floors; filled++ }
+      if (data.room_layout) { updates.room_layout = data.room_layout; filled++ }
+      if (data.building_type) { updates.building_type = data.building_type; filled++ }
+      if (data.building_age) { updates.building_age = data.building_age; filled++ }
+
+      setEditData(prev => ({ ...prev, ...updates }))
+      setShowUrlExtractOffer(false)
+
+      if (filled > 0) {
+        setUrlExtractSuccess(`已自動填入 ${filled} 個欄位`)
+      } else {
+        setUrlExtractError('無法擷取資料，請手動輸入')
+      }
+    } catch {
+      setUrlExtractError('擷取失敗')
+      setShowUrlExtractOffer(false)
+    } finally {
+      setUrlExtractLoading(false)
+    }
+  }, [])
+
+  const handleListingUrlChange = (val: string) => {
+    updateEdit('listing_url', val)
+    setUrlExtractError('')
+    setUrlExtractSuccess('')
+    setShowUrlExtractOffer(false)
+    if (urlExtractDebounceRef.current) clearTimeout(urlExtractDebounceRef.current)
+    if (val.trim().startsWith('http')) {
+      setPendingExtractUrl(val.trim())
+      urlExtractDebounceRef.current = setTimeout(() => {
+        setShowUrlExtractOffer(true)
+      }, 600)
+    }
+  }
 
   useEffect(() => {
     checkAuth()
@@ -301,6 +368,60 @@ export default function CustomerDetailPage() {
                     ) : customer.referral_from || '—'}
                   </InfoRow>
                 )}
+                <InfoRow label="房屋連結">
+                  {editing ? (
+                    <div>
+                      <input
+                        value={editData.listing_url || ''}
+                        onChange={e => handleListingUrlChange(e.target.value)}
+                        onPaste={e => {
+                          const pasted = e.clipboardData.getData('text')
+                          if (pasted.trim().startsWith('http')) {
+                            setTimeout(() => {
+                              updateEdit('listing_url', pasted.trim())
+                              setPendingExtractUrl(pasted.trim())
+                              setShowUrlExtractOffer(true)
+                            }, 100)
+                          }
+                        }}
+                        className="input-field py-2"
+                        placeholder="貼上 591 或其他房屋連結..."
+                        type="url"
+                        autoCapitalize="none"
+                      />
+                      {showUrlExtractOffer && !urlExtractLoading && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            onClick={() => applyExtractedToEdit(pendingExtractUrl)}
+                            className="text-sm px-3 py-1.5 bg-[#e8734a] text-white rounded-lg font-medium"
+                          >
+                            自動擷取房屋資料
+                          </button>
+                          <button
+                            onClick={() => setShowUrlExtractOffer(false)}
+                            className="text-sm text-gray-400"
+                          >
+                            略過
+                          </button>
+                        </div>
+                      )}
+                      {urlExtractLoading && (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
+                          <div className="w-3.5 h-3.5 border-2 border-[#e8734a] border-t-transparent rounded-full animate-spin" />
+                          擷取中...
+                        </div>
+                      )}
+                      {urlExtractSuccess && (
+                        <div className="mt-1 text-sm text-green-600 font-medium">✓ {urlExtractSuccess}</div>
+                      )}
+                      {urlExtractError && (
+                        <div className="mt-1 text-sm text-red-500">{urlExtractError}</div>
+                      )}
+                    </div>
+                  ) : customer.listing_url ? (
+                    <a href={customer.listing_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 text-sm underline break-all">{customer.listing_url}</a>
+                  ) : '—'}
+                </InfoRow>
               </dl>
             </div>
 
